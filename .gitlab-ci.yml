@@ -1,0 +1,70 @@
+stages:
+  - build
+  - style
+  - test
+  - deploy
+
+build:
+  stage: build
+  tags:
+      - build
+  script:
+    - cd src/cat/
+    - make s21_cat
+    - cd ../grep/
+    - make s21_grep
+  after_script:
+    - bash src/notify.sh
+  artifacts:
+    paths:
+      - src/cat/s21_cat
+      - src/grep/s21_grep
+    expire_in: 30 days
+
+style:
+  stage: style
+  tags:
+      - style
+  script:
+    - cd materials/linters
+    - cp .clang-format ../../src
+    - cd ../../src
+    - clang-format -n ./*/*.c
+    - if [[ $(clang-format -n ./*/*.c 2>&1) ]]; then exit 1; fi
+  after_script:
+    - bash src/notify.sh
+
+test:
+  stage: test
+  tags:
+      - test
+  needs:
+      - job: build
+      - job: style
+  script:
+    - cd src/cat
+    - make test
+    - cd ../grep
+    - make test
+  after_script:
+    - echo "$CI_JOB_STATUS"
+    - bash src/notify.sh
+
+deploy:
+  stage: deploy
+  tags:
+      - deploy
+  needs:
+      - job: build
+      - job: style
+      - job: test
+  when: manual
+  script:
+    - chmod +x src/ssh.sh
+    - chmod +x src/copy.sh
+    - cd src
+    - ./ssh.sh
+  allow_failure: false
+  after_script:
+    - bash src/notify.sh
+
